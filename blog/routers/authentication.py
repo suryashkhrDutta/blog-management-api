@@ -1,30 +1,25 @@
-from fastapi import APIRouter, Depends, status, Response, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
+from fastapi.security import OAuth2PasswordRequestForm
+from .. import database, models, token
 from ..hashing import Hash
 
-
-
-from .. import database, models, schemas, token
-from fastapi.security import OAuth2PasswordRequestForm
-
 router = APIRouter(
-    tags = ['Authentication'] 
-) 
+    tags=['Authentication']
+)
+
 
 @router.post('/login')
 def login(request: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.email == request.username).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'Invalid Credentials')
-    if not Hash.verify(user.password, request.password):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail = f"Incorrect password")
-    #if everything is fine, generate a jwt token
-    
-    #access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = token.create_access_token(
-        data={"sub": user.email}#, expires_delta=access_token_expires
-    )
-    return {"access_token" : access_token, "token_type" : "bearer"}
+    if not user or not Hash.verify(user.password, request.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-        
-    
+    access_token = token.create_access_token(
+        data={"sub": user.email}
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
